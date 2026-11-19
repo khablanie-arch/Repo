@@ -1,0 +1,35 @@
+name: render-film
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  chunk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      matrix:
+        k: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+    steps:
+      - uses: actions/checkout@v4
+      - name: System packages (ffmpeg, the same fonts as the reference render)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ffmpeg fonts-inter fonts-dejavu-core fonts-dejavu-mono fonts-liberation fonts-urw-base35
+      - name: Python + Playwright
+        run: |
+          pip install -q numpy pillow soundfile
+          npm i --no-save playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - name: Render and encode chunk
+        run: bash ci/render_chunk.sh ${{ matrix.k }} 20 9939
+      - name: Push the encoded parts to branch out-${{ matrix.k }}
+        run: |
+          git config user.name render-bot; git config user.email render-bot@users.noreply.github.com
+          git checkout --orphan out-${{ matrix.k }}
+          git rm -rq --cached . ; git add -f out/*.mp4
+          git commit -qm "chunk ${{ matrix.k }}"
+          for i in 1 2 3 4; do git push -f origin HEAD:refs/heads/out-${{ matrix.k }} && break; sleep $((i * 10)); done
